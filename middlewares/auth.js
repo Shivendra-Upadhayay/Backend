@@ -1,133 +1,126 @@
-import jwt from "jsonwebtoken"
-import users from "../models/users.js"
+
 import joi from "joi"
+import { joiPasswordExtendCore } from "joi-password"
+const joiPassword = joi.extend(joiPasswordExtendCore);
 
 
-
-
-let auth = async (req, res, next) => {
-
-	try {
-
-		// extract jwt token
-		const token = req.cookies.token || req.body.token;
-
-		if (!token) {
-
-			return res.status(404).json({
-
-				success: true,
-				message: "token is missing"
-			})
-		}
-
-
-		// verify the token
-
-		try {
-
-			const decodeToken = jwt.verify(token, process.env.JWT_KEY);
-
-			const user = await users.findById(decodeToken.id)
-
-			if (!user) {
-				return res.status(400).json({
-					success: false,
-					message: "invalid access token"
-				})
-			}
-
-			console.log(decodeToken);
-
-			req.user = user;
-
-		} catch (error) {
-			return res.status(401).json({
-				success: false,
-				message: "token is not matching"
-			})
-		}
-
-		next();
-
-	} catch (error) {
-
-		return res.status(401).json({
-
-			success: false,
-			message: "something went wrong while verifying the token "
-		})
-	}
-}
-
-let isStudent = (req, res, next) => {
-
-	try {
-
-
-		if (req.user.role !== "student") {
-
-			return res.status(401).json({
-				success: false,
-				message: "this is protected route for student"
-			})
-		}
-
-		next();
-
-	} catch (error) {
-		return res.status(401).json({
-			success: false,
-			message: "role is not verifying for student"
-		})
-
-	}
-}
-
-
-let isAdmin = (req, res, next) => {
-
-	try {
-
-
-		if (req.user.role !== "admin") {
-
-			return res.status(401).json({
-				success: false,
-				message: "this is protected route for admin"
-			})
-		}
-
-		next();
-
-	} catch (error) {
-		return res.status(401).json({
-			success: false,
-			message: "role is not verifying for admin"
-		})
-
-	}
-}
-
-let userValidator = async (req, res, next) => {
-	// const { name, email, password } = req.body;
-
-	// const userInfo = {
-	// 	name,
-	// 	email,
-	// 	password
-	// }
+//adding validation while user is signup
+let createuserValidator = async (req, res, next) => {
 	const joiUserSchema = joi.object({
-		name: joi.string().alphanum().min(5).max(10).required(),
+		name: joi.string().alphanum().max(20).required(),
 		email: joi.string().email().required(),
-		password: joi.string().alphanum().min(3).max(10)
+		password: joiPassword
+			.string()
+			.minOfSpecialCharacters(1)
+			.minOfLowercase(1)
+			.minOfUppercase(1)
+			.minOfNumeric(1)
+			.noWhiteSpaces()
+			.onlyLatinCharacters()
+			.doesNotInclude(['password'])
+			.required().min(5),
+		role: joi.string().valid("student", "admin", "visitor").required()
+	})
 
-	}).unknown(true);
-
-	const { error } = joiUserSchema.validate(req.body);
+	const { error } = joiUserSchema.validate(req.body, { abortEarly: false });
 	if (error) {
 		return res.status(400).json({
-			error: error.details[0].message
+			message: "Validation failed !",
+			error: error.details.map(detail => detail.message.replace(/"/g, ''))
+		})
+	}
+	next();
+}
+//Adding validation while user is updating 
+let updateUserValidator = async (req, res, next) => {
+	const updateUserSchema = joi.object({
+		name: joi.string().optional(),
+		role: joi.string().valid("student", "admin", "visitor").optional()
+	})
+	const { error } = updateUserSchema.validate(req.body, { abortEarly: false })
+	if (error) {
+		return res.status(400).json({
+			success: false,
+			message: "Validation Failed",
+			error: error.details.map(detail => detail.message.replace(/"/g, ''))
+		})
+	}
+
+	next()
+}
+//Adding validation when user is logging
+let loginInputValidator = async (req, res, next) => {
+	const loginSchema = joi.object({
+		email: joi.string().email().required(),
+		password: joi.string().required()
+	}).unknown(false)
+	const { error } = loginSchema.validate(req.body, { abortEarly: false })
+
+	if (error) {
+		return res.status(400).json({
+			success: false,
+			message: "Validation Failed!",
+			error: error.details.map(detail => detail.message.replace(/"/g, ''))
+		})
+	}
+
+	next();
+}
+
+// Adding Validation when product is adding
+const productValidator = async (req, res, next) => {
+
+	const product = joi.object({
+		id: joi.number().required(),
+		title: joi.string().alphanum().min(3).max(10).required(),
+		price: joi.number().required().min(0),
+		description: joi.string().required(),
+		category: joi.string().valid("men's clothing", "women's clothing", "jewellery", "electronics").required(),
+		rate: joi.number().required().min(1),
+		count: joi.number().required().min(0)
+	})
+	const { error } = await product.validate(req.body, { abortEarly: false });
+
+	let errors = []
+
+	if (error) {
+		errors = error.details.map(detail => { return detail.message.replace(/"/g, '') })
+	}
+
+	if (!req.file) {
+		errors.push("Image is required")
+	}
+
+	if (errors.length > 0) {
+		return res.status(403).json({
+			message: "Validation failed",
+			success: false,
+			errors
+		})
+	}
+
+	next();
+}
+// Adding validation when product is updating
+const updateProductValidator = async (req, res, next) => {
+	const product = joi.object({
+		title: joi.string().alphanum().min(3).max(10),
+		price: joi.number().min(0),
+		description: joi.string(),
+		category: joi.string().valid("men's clothing", "women's clothing", "jewellery", "electronics"),
+		rate: joi.number().min(1),
+		count: joi.number().min(0)
+	})
+
+	const { error } = await product.validate(req.body, { abortEarly: false })
+
+	if (error) {
+		return res.status(401).json({
+			message: "Validation failed",
+			success: false,
+			error: error.details.map(detail => {
+				return detail.message.replace(/"/g, '')
+			})
 		})
 	}
 
@@ -135,10 +128,24 @@ let userValidator = async (req, res, next) => {
 
 }
 
+const verifyToken = async (req, res, next) => {
+
+	const token = req.body.token;
+	if (!token) {
+		return res.status(400).json({
+			success: false,
+			message: "token is missing"
+		})
+	}
+
+
+}
+
 
 export {
-	auth,
-	isStudent,
-	isAdmin,
-	userValidator
+	createuserValidator,
+	updateUserValidator,
+	loginInputValidator,
+	productValidator,
+	updateProductValidator
 }

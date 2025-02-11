@@ -3,8 +3,6 @@ import mongoose, { version } from "mongoose";
 import bcrypt from "bcrypt";
 
 const userSchema = mongoose.Schema({
-
-
 	name: {
 		type: "string",
 		required: true,
@@ -25,10 +23,6 @@ const userSchema = mongoose.Schema({
 	role: {
 		type: "string",
 		enum: ["student", "admin", "visitor"]
-	},
-	age: {
-		type: Number,
-		min: [18, "age should not less than 18"]
 	}
 
 }, { timestamps: true, versionKey: false })
@@ -54,5 +48,5 @@ userSchema.pre('save', async function (next) {
 
 });
 
-export default mongoose.model("user", userSchema)
+export default mongoose.model("User", userSchema)
 

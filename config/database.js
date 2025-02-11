@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 import dotenv from "dotenv/config";
 
-mongoose.set('runValidators', true);
+// mongoose.set('runValidators', true);
 
 // dotenv.config();
 // "mongodb://127.0.0.1:27017/User"
